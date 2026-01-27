@@ -8,6 +8,7 @@
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/directive.js"></script>
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-directivecompliance.js"></script>
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-filters.js"></script>
+  <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-directivestree.js"></script>
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-techniqueversion.js"></script>
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-filemanager.js"></script>
   <script type="text/javascript" data-lift="with-cached-resource" src="/javascript/rudder/elm/rudder-tags.js"></script>
@@ -34,7 +35,9 @@
           No directives match your filter.
         </div>
       </div>
-      <div data-lift="configuration.DirectiveManagement.userLibrary" ></div>
+        <div id="directivesTree"></div>
+        <!-- <div data-lift="configuration.DirectiveManagement.userLibrary" ></div> -->
+
     </div>
   </div>
 
@@ -135,6 +138,13 @@
     if (typeof tagsApp === "undefined") return false;
     tagsApp.ports.getFilterTags.send(tags);
   });
+
+  var directivesTree = document.getElementById("directivesTree")
+  var initValues = {
+      contextPath : contextPath,
+  };
+  directivesTreeApp = Elm.DirectivesTree.init({node: directivesTree, flags: initValues});
+
   initBsTooltips();
 </script>
 <div id="showTechniqueValidationPopup"></div>
