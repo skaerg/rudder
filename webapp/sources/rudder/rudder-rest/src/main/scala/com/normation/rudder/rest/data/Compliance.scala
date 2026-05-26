@@ -49,6 +49,7 @@ import com.normation.rudder.domain.policies.RuleId
 import com.normation.rudder.domain.reports.*
 import com.normation.rudder.domain.reports.ReportType.*
 import com.normation.rudder.reports.ComplianceModeName
+import com.normation.rudder.rest.data.CsvCompliance.BlockName
 import com.normation.rudder.rest.data.CsvCompliance.CsvField
 import com.normation.rudder.web.services.ComputePolicyMode.ComputedPolicyMode
 import com.normation.utils.Csv
@@ -194,7 +195,7 @@ final case class ByRuleDirectiveCompliance(
 )
 
 sealed trait ByRuleComponentCompliance extends ComponentComplianceByNode {
-  def name:       String
+  def name:       BlockName
   def compliance: ComplianceLevel
 }
 
@@ -209,11 +210,11 @@ final case class ByRuleBlockCompliance(
 }
 
 final case class ByRuleValueCompliance(
-    name:       String,
+    name:       BlockName,
     compliance: ComplianceLevel,
     nodes:      List[ByRuleNodeCompliance]
 ) extends ByRuleComponentCompliance {
-  override def componentName: String = name
+  override def componentName: String = name.value
 
   override def allReports: List[ReportType] = reportsByNode.values.flatten.toList
 
@@ -477,8 +478,8 @@ object CsvCompliance {
           node.values.flatMap { value =>
             value.messages.map { report =>
               (
-                BlockField(block),
-                ComponentField(component),
+                BlockName(block.mkString(",")), // ??? - did we specify/check somewhere that naming choice ? TODO: add a test
+                ComponentField(component.name),
                 NodeField(node),
                 ValueField(value),
                 StatusField(report),
@@ -488,7 +489,7 @@ object CsvCompliance {
           }
         }
       case component: ByRuleBlockCompliance =>
-        component.subComponents.flatMap(c => recurseComponent(c, block ::: (ComponentField(component) :: Nil)))
+        component.subComponents.flatMap(c => recurseComponent(c, block ::: (ComponentField(component.name) :: Nil)))
     }
   }
 
@@ -510,22 +511,25 @@ object CsvCompliance {
     }
   }
 
-  /** Trait that contains Csv[A] and Csv.Header.One[A] instances 
+  /** Trait that contains Csv[A] and Csv.Header.One[A] instances
    * that are common to all values that can be converted to CSV */
   trait CsvField[A <: String] {
     given Csv[A] = Csv.instance(a => a)
     given Csv.Header.One[A] with {}
   }
 
-  opaque type BlockField = String
-  object BlockField extends CsvField[BlockField] {
-    def apply(block: List[ComponentField]) = block.mkString(",")
+  opaque type BlockName = String
+  object BlockName extends CsvField[BlockName] {
+    def apply(name: String): BlockName = name
+
+    extension (blockName: BlockName) {
+      def value: String = blockName
+    }
   }
 
   opaque type ComponentField = String
   object ComponentField extends CsvField[ComponentField] {
-    def apply(value: ByRuleValueCompliance) = value.name
-    def apply(block: ByRuleBlockCompliance) = block.name
+    def apply(name: String): ComponentField = name
   }
 
   opaque type NodeField = String
@@ -550,11 +554,11 @@ object CsvCompliance {
   }
 
   type RuleComponentResult =
-    (block: BlockField, component: ComponentField, node: NodeField, value: ValueField, status: StatusField, message: MessageField)
+    (block: BlockName, component: ComponentField, node: NodeField, value: ValueField, status: StatusField, message: MessageField)
 
   case class RuleComplianceCsv(
       directive: DirectiveName,
-      block:     BlockField,
+      block:     BlockName,
       component: ComponentField,
       node:      NodeField,
       value:     ValueField,
