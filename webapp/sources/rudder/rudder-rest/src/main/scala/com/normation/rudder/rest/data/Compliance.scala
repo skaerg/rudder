@@ -49,8 +49,7 @@ import com.normation.rudder.domain.policies.RuleId
 import com.normation.rudder.domain.reports.*
 import com.normation.rudder.domain.reports.ReportType.*
 import com.normation.rudder.reports.ComplianceModeName
-import com.normation.rudder.rest.data.CsvCompliance.BlockName
-import com.normation.rudder.rest.data.CsvCompliance.CsvField
+import com.normation.rudder.rest.data.CsvCompliance.*
 import com.normation.rudder.web.services.ComputePolicyMode.ComputedPolicyMode
 import com.normation.utils.Csv
 import enumeratum.*
@@ -195,7 +194,7 @@ final case class ByRuleDirectiveCompliance(
 )
 
 sealed trait ByRuleComponentCompliance extends ComponentComplianceByNode {
-  def name:       BlockName
+  def name:       String
   def compliance: ComplianceLevel
 }
 
@@ -257,7 +256,7 @@ final case class ByRuleByNodeByDirectiveCompliance(
 )
 
 sealed trait ByRuleByNodeByDirectiveByComponentCompliance extends ComponentCompliance {
-  def name:       String
+  def name:       ComponentName
   def compliance: ComplianceLevel
 }
 
@@ -272,11 +271,16 @@ final case class ByRuleByNodeByDirectiveByBlockCompliance(
 }
 
 final case class ByRuleByNodeByDirectiveByValueCompliance(
-    name:       String,
+    name:       ComponentName,
     compliance: ComplianceLevel,
     values:     Seq[ComponentValueStatusReport]
 ) extends ByRuleByNodeByDirectiveByComponentCompliance {
-  override def componentName: String = name
+  override def componentName: String = {
+    name match {
+      case b: BlockName => b.value
+      case v: ValueName => v.value
+    }
+  }
 
   override def allReports: List[ReportType] = values.flatMap(c => c.messages.map(_ => c.status)).toList
 }
@@ -469,7 +473,7 @@ object CsvCompliance {
 
   def recurseComponent(
       component: ByRuleComponentCompliance,
-      block:     List[ComponentField]
+      block:     List[ComponentName]
   ): Seq[RuleComponentResult] = {
 
     component match {
@@ -479,9 +483,9 @@ object CsvCompliance {
             value.messages.map { report =>
               (
                 BlockName(block.mkString(",")), // ??? - did we specify/check somewhere that naming choice ? TODO: add a test
-                ComponentField(component.name),
+                ComponentName(component.name),
                 NodeField(node),
-                ValueField(value),
+                ValueName(value),
                 StatusField(report),
                 MessageField(report)
               )
@@ -489,7 +493,7 @@ object CsvCompliance {
           }
         }
       case component: ByRuleBlockCompliance =>
-        component.subComponents.flatMap(c => recurseComponent(c, block ::: (ComponentField(component.name) :: Nil)))
+        component.subComponents.flatMap(c => recurseComponent(c, block ::: (ComponentName(component.name) :: Nil)))
     }
   }
 
@@ -518,6 +522,13 @@ object CsvCompliance {
     given Csv.Header.One[A] with {}
   }
 
+  type ComponentName = BlockName | ValueName
+  object ComponentName extends CsvField[ComponentName] {
+    def apply(name: String): ComponentName = name
+
+    given jsonEncoder: JsonEncoder[ComponentName] = ???
+  }
+
   opaque type BlockName = String
   object BlockName extends CsvField[BlockName] {
     def apply(name: String): BlockName = name
@@ -527,19 +538,18 @@ object CsvCompliance {
     }
   }
 
-  opaque type ComponentField = String
-  object ComponentField extends CsvField[ComponentField] {
-    def apply(name: String): ComponentField = name
+  opaque type ValueName = String
+  object ValueName extends CsvField[ValueName] {
+    def apply(value: ComponentValueStatusReport) = value.componentValue
+
+    extension (valueName: ValueName) {
+      def value: String = valueName
+    }
   }
 
   opaque type NodeField = String
   object NodeField extends CsvField[NodeField] {
     def apply(node: ByRuleNodeCompliance) = node.name
-  }
-
-  opaque type ValueField = String
-  object ValueField extends CsvField[ValueField] {
-    def apply(value: ComponentValueStatusReport) = value.componentValue
   }
 
   opaque type StatusField = String
@@ -554,14 +564,14 @@ object CsvCompliance {
   }
 
   type RuleComponentResult =
-    (block: BlockName, component: ComponentField, node: NodeField, value: ValueField, status: StatusField, message: MessageField)
+    (block: BlockName, component: ComponentName, node: NodeField, value: ValueName, status: StatusField, message: MessageField)
 
   case class RuleComplianceCsv(
       directive: DirectiveName,
       block:     BlockName,
-      component: ComponentField,
+      component: ComponentName,
       node:      NodeField,
-      value:     ValueField,
+      value:     ValueName,
       status:    StatusField,
       message:   MessageField
   ) derives Csv
@@ -697,7 +707,7 @@ object ComplianceApiData {
   }
 
   final case class ByRuleByNodeByDirectiveByComponentComplianceApi(
-      name:              String,
+      name:              ComponentName,
       compliance:        Double,
       complianceDetails: ComplianceSerializable,
       components:        Option[Seq[ByRuleByNodeByDirectiveByComponentComplianceApi]],
