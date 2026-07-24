@@ -1185,7 +1185,7 @@ class TestNodeFactQueryProcessor {
       "q2",
       parser("""
       {"select":"node","composition":"And","where":[
-        {"objectType":"process","attribute":"commandName","comparator":"regex","value":".*vtmp.*"}
+        {"objectType":"process","attribute":"name","comparator":"regex","value":".*vtmp.*"}
       ]}
       """).openOrThrowException("For tests"),
       s(1) :: Nil
